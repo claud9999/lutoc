@@ -1,0 +1,63 @@
+menu "LuToC Configuration"
+
+    config I2C_GPIO_SDA
+        int "GPIO for I2C SDA"
+        default 22
+        help
+            The GPIO number for the I2C SDA line.
+
+    config I2C_GPIO_SCL
+        int "GPIO for I2C SCL"
+        default 21
+        help
+            The GPIO number for the I2C SCL line.
+
+    config I2C_FREQUENCY
+        int "Frequency (in hz) for the I2C bus."
+        default 100000
+        help
+            The I2C bus frequency, in hz.
+
+    config I2C_PORT_NUM
+        int "I2C port number"
+        default 0
+        help
+            The port number of the I2C bus.
+
+    config I2C_RTC_WRITEADDR
+        hex "I2C realtime clock chip address for writing"
+        default 0x64
+        help
+            The chip address of the realtime clock for writing.
+
+    config I2C_RTC_READADDR
+        hex "I2C realtime clock chip address for reading"
+        default 0x65
+        help
+            The chip address of the realtime clock for reading.
+
+    config WIFI_SSID
+        string "Wifi SSID"
+        default "wifissid"
+        help
+            The SSID for the wifi network.
+
+    config WIFI_PASSWD
+        string "Wifi password"
+        default "wifipass"
+        help
+            The password for the wifi network.
+
+    config TZ
+        string "time zone string"
+        default "PST8PDT"
+        help
+            The time zone string for your time zone.
+
+    config NTP_SERVER
+        string "NTP server"
+        default "pool.ntp.org"
+        help
+            The NTP server to sync with.
+
+endmenu
