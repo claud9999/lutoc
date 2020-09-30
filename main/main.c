@@ -128,7 +128,6 @@ esp_err_t wifi_disconnect(void) {
 }
 
 static esp_err_t i2c_master_driver_initialize(void) {
-    ESP_LOGI(TAG, "master driver initialization sda=%d scl=%d clk=%d", i2c_gpio_sda, i2c_gpio_scl, i2c_frequency);
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = i2c_gpio_sda,
@@ -140,42 +139,76 @@ static esp_err_t i2c_master_driver_initialize(void) {
     return i2c_param_config(i2c_port, &conf);
 }
 
+#define I82BCD(I) ((I) % 10 + ((I) / 10) * 0x10)
 #define BCD2I8(B) ((B & 0xF) + ((B & 0xF0) / 0x10) * 10)
 
-static void get_rtc_time(struct timeval *tv) {
-    int chip_addr = 0x32;
+static void set_rtc_time(struct timeval *tv) {
     struct tm tm = { 0 };
-    int size = 1;
+
+    int chip_addr = 0x32;
     i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
     i2c_master_driver_initialize();
-    uint8_t block[16];
-    for (int j = 0; j < 16; j += size) {
-        i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
-        i2c_master_write_byte(cmd, 0x10 + j, ACK_CHECK_EN);
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, chip_addr << 1 | READ_BIT, ACK_CHECK_EN);
-        i2c_master_read_byte(cmd, block + j, NACK_VAL);
-        i2c_master_stop(cmd);
-        esp_err_t ret = i2c_master_cmd_begin(i2c_port, cmd, 50 / portTICK_RATE_MS);
-        i2c_cmd_link_delete(cmd);
-        if (ret != ESP_OK) ESP_LOGE(TAG, "i2c cmd err: %d", ret);
+    uint8_t block[7];
+
+    localtime_r(&tv->tv_sec, &tm);
+
+    /* note that usec will be set to zero when sec is set */
+    block[0] = I82BCD(tm.tm_sec);
+    block[1] = I82BCD(tm.tm_min);
+    block[2] = I82BCD(tm.tm_hour);
+    block[3] = tm.tm_wday;
+    block[4] = I82BCD(tm.tm_mday);
+    block[5] = I82BCD(tm.tm_mon);
+    block[6] = I82BCD(tm.tm_year - 100);
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
+    i2c_master_write_byte(cmd, 0x00, ACK_CHECK_EN);
+    i2c_master_write(cmd, block, sizeof(block), ACK_VAL);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(i2c_port, cmd, 50 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+    if (ret != ESP_OK) ESP_LOGE(TAG, "i2c write err: %d", ret);
+    i2c_driver_delete(i2c_port);
+}
+
+static void get_rtc_time(struct timeval *tv) {
+    uint8_t chip_addr = 0x32;
+    i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    i2c_master_driver_initialize();
+    uint8_t block[8];
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, chip_addr << 1 | WRITE_BIT, ACK_CHECK_EN);
+    i2c_master_write_byte(cmd, 0x10, ACK_CHECK_EN);
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, chip_addr << 1 | READ_BIT, ACK_CHECK_EN);
+    i2c_master_read(cmd, block, sizeof(block) - 1, ACK_VAL);
+    i2c_master_read_byte(cmd, &block[sizeof(block) - 1], NACK_VAL);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin(i2c_port, cmd, 50 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+    if (ret != ESP_OK) ESP_LOGE(TAG, "i2c cmd err: %d", ret);
+    else {
+        struct tm t;
+        tv->tv_usec = BCD2I8(block[0]);
+        t.tm_sec = BCD2I8(block[1]);
+        t.tm_min = BCD2I8(block[2]);
+        t.tm_hour = BCD2I8(block[3]);
+        t.tm_wday = block[4];
+        t.tm_mday = BCD2I8(block[5]);
+        t.tm_mon = BCD2I8(block[6]);
+        t.tm_year = BCD2I8(block[7]) + 100;
+        tv->tv_sec = mktime(&t);
     }
     i2c_driver_delete(i2c_port);
-    tv->tv_usec = BCD2I8(block[0]);
-    tm.tm_sec = BCD2I8(block[1]);
-    tm.tm_min = BCD2I8(block[2]);
-    tm.tm_hour = BCD2I8(block[3]);
-    tm.tm_mday = BCD2I8(block[4]);
-    tm.tm_mon = BCD2I8(block[5]);
-    tm.tm_year = BCD2I8(block[6]) + 2000;
-    tv->tv_sec = mktime(&tm);
 }
 
 void time_sync_notification_cb(struct timeval *tv) {
     ESP_LOGI(TAG, "Notification of a time synchronization event");
-    //set_rtc_time(tv);
+    set_rtc_time(tv);
 }
 
 void app_main(void) {
@@ -214,12 +247,10 @@ void app_main(void) {
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
     ESP_LOGI(TAG, "The current date/time: %s", strftime_buf);
 
-    set_rtc_time(
-
     struct timeval tv;
     while(1) {
         get_rtc_time(&tv);
-        ESP_LOGI(TAG, "time: %s.%d", ctime(&tv.tv_sec), (int)tv.tv_usec);
+        ESP_LOGI(TAG, "time: %s", ctime(&tv.tv_sec));
         vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
 }
