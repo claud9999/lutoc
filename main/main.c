@@ -1,3 +1,5 @@
+/** LuToC for ESP32 - CC0 public domain license. */
+
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
