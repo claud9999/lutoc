@@ -1,0 +1,6 @@
+[submodule "ltc-tools"]
+	path = ltc-tools
+	url = https://github.com/x42/ltc-tools
+[submodule "libltc"]
+	path = libltc
+	url = https://github.com/x42/libltc
