@@ -60,4 +60,10 @@ menu "LuToC Configuration"
         help
             The NTP server to sync with.
 
+    config I2S_GPIO
+        int "GPIO for I2S"
+        default 25
+        help
+            The GPIO number for the I2S line.
+
 endmenu
