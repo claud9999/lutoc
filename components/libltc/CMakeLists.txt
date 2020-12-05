@@ -1,0 +1,1 @@
+idf_component_register(SRCS "${PROJECT_DIR}/libltc/src/encoder.c" "${PROJECT_DIR}/libltc/src/decoder.c" "${PROJECT_DIR}/libltc/src/ltc.c" "${PROJECT_DIR}/libltc/src/timecode.c" INCLUDE_DIRS "${PROJECT_DIR}/libltc/src")
